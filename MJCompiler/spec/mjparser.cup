@@ -1,0 +1,336 @@
+package rs.ac.bg.etf.pp1;
+
+import java_cup.runtime.*;
+import org.apache.log4j.*;
+import rs.ac.bg.etf.pp1.ast.*;
+
+parser code {:
+	
+	boolean errorDetected;
+	
+	Logger log = Logger.getLogger(getClass());
+	
+	// slede redefinisani metodi za prijavu greske radi izmene teksta poruke
+	
+	public void report_fatal_error(String message, Object info) throws java.lang.Exception {
+		done_parsing();
+		report_error(message, info);
+	}
+	
+	public void syntax_error(Symbol cur_token) {
+		report_error("\nSintaksna greska", cur_token);
+	}
+	
+	public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+		report_fatal_error("Fatalna greska, parsiranje se ne moze nastaviti", cur_token);
+	}
+	
+	public void report_error(String message, Object info) {
+		errorDetected = true;
+		StringBuilder msg = new StringBuilder(message);
+		if(info instanceof Symbol) {
+			msg.append(" na liniji ").append(((Symbol)info).left);
+		}
+		log.error(msg.toString());
+	}
+	
+:}
+
+init with {:
+	errorDetected = false;
+:}
+
+scan with {:
+	Symbol s = this.getScanner().next_token();
+	if(s != null && s.value != null) {
+		log.info(s.toString() + " " + s.value.toString());
+	}
+	return s;
+:}
+
+
+terminal PROG, LBRACE, RBRACE, CONST, ASSIGN, SEMI, COMMA, LBRACKET, RBRACKET, VOID;
+terminal LPAREN, RPAREN, INC, DEC, UNION, BREAK, CONTINUE, RETURN, READ, PRINT, IF;
+terminal PLUS, MINUS, MUL, DIV, MOD, EQUAL, NEQ, GRT, GRE, LESS, LESSE, OR, AND, NEW;
+terminal DO, WHILE, MAP, ELSE;
+terminal String IDENT;
+terminal Integer BOOL;
+terminal Integer NUMBER;
+terminal Character CHARACTER;
+
+nonterminal Program, ConVarDeclList, MethodDeclList, ConDeclList, VarDeclList, ConDecl, Constant;
+nonterminal ConDeclMore, VarDecl, VarDeclMore, StatementList, MethodDecl;
+nonterminal FormalParamsList, VarDeclListNbr, FormalParams, FormalParamsMore;
+nonterminal Statement, Statements, DesignatorStatement, ActParamsList, ActParams;
+nonterminal ActParamsMore, Setop, ElseStatement, Addop, Mulop, Relop, Assignop;
+nonterminal ActParamsAppear, FormalParamsListAppear, ProgName;
+nonterminal DoNonterminal;
+nonterminal rs.etf.pp1.symboltable.concepts.Struct Factor, FactorSub, MulFactorList, AddTermList, Term, Expr;
+nonterminal rs.etf.pp1.symboltable.concepts.Obj Designator, DesignatorArrName;
+nonterminal rs.etf.pp1.symboltable.concepts.Struct ConditionList, Condition, CondTermList, CondTerm, CondFactList, CondFact;
+nonterminal ActParamsListBegin;
+nonterminal rs.etf.pp1.symboltable.concepts.Struct Type;
+nonterminal rs.etf.pp1.symboltable.concepts.Obj MethodTypeName;
+nonterminal ElseNonTerm, WhileNonterminal;
+
+precedence left ELSE;
+
+Program ::= (Program) PROG ProgName ConVarDeclList LBRACE MethodDeclList RBRACE;
+
+ProgName ::= (ProgName) IDENT;
+
+ConVarDeclList ::= (ConVarDeclList_con) ConVarDeclList ConDeclList
+				   |
+				   (ConVarDeclList_var) ConVarDeclList VarDeclList
+				   |
+				   (ConVarDeclList_e) /* epsilon */
+				   ;
+					  
+ConDeclList ::= (ConDecList) CONST Type ConDecl ConDeclMore SEMI; 
+
+ConDecl ::= (ConDecl_decl) IDENT Assignop Constant
+			|
+			(ConDecl_error) error:cde
+			{: parser.report_error("Oporavak od greske u deklarisanju globalne promenjive. Linija: " + cdeleft, null); :}
+			;
+
+ConDeclMore ::= (ConDeclMore_comma) COMMA ConDecl ConDeclMore
+				|
+				(ConDeclMore_e) /* epsilon */
+				;
+
+VarDeclList ::= (VarDeclList) Type VarDecl VarDeclMore SEMI; 
+
+VarDecl ::= (VarDecl_ident) IDENT 
+			|
+			(VarDecl_array) IDENT LBRACKET RBRACKET
+			|
+			(VarDecl_error) error:vde
+			{: parser.report_error("Oporavak od greske u deklarisanju noconst globalne promenljive. Linija: " + vdeleft, null); :}
+			;
+			
+VarDeclMore ::= (VarDeclMore_comma) COMMA VarDecl VarDeclMore
+				|
+				(VarDeclMore_e) /* epsilon */
+				; 
+
+MethodDeclList ::= (MethodDeclList_rek) MethodDeclList MethodDecl 
+				   |
+				   (MethodDeclList_e) /* epsilon */
+				   ;
+
+MethodDecl ::= (MethodDecl) MethodTypeName LPAREN FormalParamsListAppear RPAREN VarDeclListNbr LBRACE StatementList RBRACE;
+
+MethodTypeName ::= (MethodTypeName_type) Type IDENT
+				   |
+				   (MethodTypeName_void) VOID IDENT
+				   ;
+
+VarDeclListNbr ::= (VarDeclListNbr_rek) VarDeclListNbr VarDeclList
+				   |
+				   (VarDeclListNbr_e) /* epsilon */
+				   ;
+				 
+FormalParamsListAppear ::= (FormalParamsListAppear_t) FormalParamsList
+						   |
+						   (FormalParamsListAppear_e) /* epsilon */
+						   ;				 
+				   
+FormalParamsList ::= (FormalParamsList) FormalParams FormalParamsMore;
+
+FormalParams ::= (FormalParams_ident) Type IDENT
+				 |
+				 (FormalParams_array) Type IDENT LBRACKET RBRACKET
+				 |
+				 (FormalParams_error) error:fpe
+				 {: parser.report_error("Oporavak od greske u deklaraciji formalnih parametara f-je. Linija: " + fpeleft, null); :}
+				 ;
+				 
+FormalParamsMore ::= (FormalParamsMore_rek) COMMA FormalParams FormalParamsMore
+					 |
+					 (FormalParamsMore_e) /* epsilon */
+					 ;
+					 
+StatementList ::= (StatementList_rek) StatementList Statement
+				  |
+				  (StatementList_e) /* epsilon */
+				  ;
+				  
+Statement ::= (Statemetn_des) DesignatorStatement SEMI
+			  |
+			  (Statement_if) IF LPAREN Condition RPAREN Statement ElseStatement
+			  |
+			  (Statement_break) BREAK SEMI
+			  |
+			  (Statement_continue) CONTINUE SEMI
+			  |
+			  (Statement_return) RETURN SEMI
+			  |
+			  (Statement_returnex) RETURN Expr SEMI
+			  |
+			  (Statement_read) READ LPAREN Designator RPAREN SEMI
+			  |
+			  (Statement_printe) PRINT LPAREN Expr RPAREN SEMI
+			  |
+			  (Statement_printen) PRINT LPAREN Expr COMMA NUMBER RPAREN SEMI
+			  |
+			  (Statemetn_do) DoNonterminal Statement WhileNonterminal LPAREN ConditionList RPAREN SEMI
+			  |
+			  (Statement_stetements) LBRACE StatementList RBRACE
+			  ;
+			  
+WhileNonterminal ::= (WhileNonterminal) WHILE;
+			  
+DoNonterminal ::= (DoNonterminal) DO;
+			  
+ElseStatement ::= (ElseStatement_have) ElseNonTerm Statement
+				  |
+				  (ElseStatement_e) /* epsilon */
+				  ;
+			
+ElseNonTerm ::= (ElseNonTerm) ELSE;
+			  
+ConditionList ::= (ConditionList_c) Condition
+				  |
+				  (ConditionList_cd) Condition COMMA DesignatorStatement
+				  |
+				  (ConditionList_e) /* epsilon */
+				  ;
+
+DesignatorStatement ::= (DesignatorStatement_ass) Designator Assignop Expr
+						|
+						(DesignatorStatement_error) error:e
+						{: parser.report_error("Oporavak od greske u DS. Linija: " + eleft, null); :}
+						|
+						(DesignatorStatement_actpar) Designator LPAREN ActParamsAppear RPAREN
+						|
+						(DesignatorStatement_inc) Designator INC
+						|
+						(DesignatorStatement_dec) Designator DEC
+						|
+						(DesignatorStatement_setop) Designator Assignop Designator Setop Designator
+						;
+						
+Designator ::= (Designator_ident) IDENT
+			   |
+			   (Designator_arr) DesignatorArrName LBRACKET Expr RBRACKET
+			   ;
+
+DesignatorArrName ::= (DesignatorArrName) IDENT;
+
+
+ActParamsAppear ::= (ActParamsAppear_t) ActParamsList
+				    |
+				    (ActParamsAppear_e) ActParamsListBegin
+				    ;
+
+ActParamsList ::= (ActParamsList) ActParamsListBegin ActParams ActParamsMore;
+
+ActParamsListBegin ::= (ActParamsListBegin) /* epsilon */;
+
+ActParamsMore ::= (ActParamsMore_rek) COMMA ActParams ActParamsMore
+				  |
+				  (ActParamsMore_e) /* epsilon */
+				  ;
+
+ActParams ::= (ActParams) Expr;
+
+Condition ::= (Condition_list) CondTermList
+			  |
+			  (Condition_error) error:ec
+			  {: parser.report_error("Oporavak od greske u if uslovu. Linija: " + ecleft, null); :}
+			  ;
+
+CondTermList ::= (CondTermList_rek) CondTermList OR CondTerm
+				 |
+				 (CondTermList_cond) CondTerm 
+				 ;
+			     
+CondTerm ::= (CondTerm) CondFactList;
+
+CondFactList ::= (CondFactList_rek) CondFactList AND CondFact
+                 |
+                 (CondFactList_cond) CondFact
+                 ;
+                 
+CondFact ::= (CondFact_single) Expr
+			 |
+			 (CondFact_relopExpr) Expr Relop Expr
+			 ;
+			 
+Expr ::= (Expr_add) AddTermList
+		 |
+		 (Expr_map) Designator MAP Designator
+		 ;
+
+AddTermList ::= (AddTermList_add) AddTermList Addop Term
+				|
+				(AddTermList_term) Term
+				;
+   
+Term ::= (Term) MulFactorList;
+
+MulFactorList ::= (MulFactorList_mul) MulFactorList Mulop Factor
+				  |
+				  (MulFactorList_factor) Factor
+				  ;
+			
+Factor ::= (Factor_m) MINUS FactorSub
+		   |
+		   (Factor_p) FactorSub
+		   ;		
+			
+FactorSub ::= (FactorSub_d) Designator
+		      |
+		      (FactorSub_function) Designator LPAREN ActParamsAppear RPAREN
+		      |
+		      (FactorSub_n) NUMBER
+		      |
+		      (FactorSub_b) BOOL
+		      |
+		      (FactorSub_c) CHARACTER
+		      |
+		      (FactorSub_arr) NEW Type LBRACKET Expr RBRACKET
+		      |
+		      (FactorSub_z) LPAREN Expr RPAREN
+		      ;
+		   
+Constant ::= (Constant_n) NUMBER
+			 |
+			 (Constant_c) CHARACTER
+			 |
+			 (Constant_b) BOOL
+			 ;
+
+Type ::= (Type) IDENT;
+
+Assignop ::= (Assignop) ASSIGN;
+
+Setop ::= (Setop) UNION;
+
+Addop ::= (Addop_plus) PLUS
+		  |
+		  (Addop_minus) MINUS
+		  ;
+
+Mulop ::= (Mulop_mul) MUL
+		  |
+		  (Mulop_div) DIV
+		  |
+		  (Mulop_mod) MOD
+		  ;
+
+Relop ::= (Relop_eq) EQUAL
+		  |
+		  (Relop_neq) NEQ
+		  |
+		  (Relop_grt) GRT
+		  |
+		  (Relop_gre) GRE
+		  |
+		  (Relop_less) LESS
+		  |
+		  (Relop_lesse) LESSE
+		  ;
+		  
+		  

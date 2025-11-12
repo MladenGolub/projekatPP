@@ -1,0 +1,30 @@
+program Keske 
+
+const int pi = 3, g = 11;
+
+int x, y[];
+
+{
+ 	
+ 	//int f1(int x) { return x; }
+ 	//int f2(int x, bool b, int g) int a; { return f1(x) + a; }
+ 	
+ 	//char f4(char a) { return 'b'; }
+ 	
+ 	//int f3() { 
+ 		//f2(f2(1, true, 3), true, f2(1, false, 4)); 
+ 		//return 1;
+ 	//}
+	
+		
+	void main() int a, b[]; char eol; char ab; {
+		
+		ord('a');
+		
+		chr(5);
+		
+ 	}
+ 	
+ 	
+	
+}
